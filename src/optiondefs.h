@@ -413,6 +413,15 @@ static struct vimoption options[] =
 			    {(char_u *)0L, (char_u *)0L}
 #endif
 			    SCTX_INIT},
+    {"autoshelldir",  "asd",   P_BOOL|P_VI_DEF,
+#ifdef FEAT_AUTOSHELLDIR
+			    (char_u *)&p_asd, PV_NONE,
+			    {(char_u *)FALSE, (char_u *)0L}
+#else
+			    (char_u *)NULL, PV_NONE,
+			    {(char_u *)0L, (char_u *)0L}
+#endif
+			    SCTX_INIT},
     {"autoindent",  "ai",   P_BOOL|P_VI_DEF,
 			    (char_u *)&p_ai, PV_AI,
 			    {(char_u *)FALSE, (char_u *)0L} SCTX_INIT},
@@ -3143,7 +3152,7 @@ static struct vimoption options[] =
     {NULL, NULL, 0, NULL, PV_NONE, {NULL, NULL} SCTX_INIT}
 };
 
-#define OPTION_COUNT (sizeof(options) / sizeof(struct vimoption))
+#define OPTION_COUNT ARRAY_LENGTH(options)
 
 // The following is needed to make the gen_opt_test.vim script work.
 // {"
