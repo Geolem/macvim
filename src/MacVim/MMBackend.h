@@ -13,13 +13,6 @@
 #import "vim.h"
 
 
-#ifdef FEAT_BEVAL
-// Seconds to delay balloon evaluation after mouse event (subtracted from
-// p_bdlay).
-extern NSTimeInterval MMBalloonEvalInternalDelay;
-#endif
-
-
 @interface MMBackend : NSObject <MMBackendProtocol, MMVimServerProtocol,
         MMVimClientProtocol> {
     NSMutableArray      *outputQueue;
@@ -28,8 +21,7 @@ extern NSTimeInterval MMBalloonEvalInternalDelay;
     NSConnection        *connection;
     NSConnection        *vimServerConnection;
     id                  appProxy;
-    unsigned            identifier;
-    NSDictionary        *colorDict;
+    unsigned long       identifier;
     NSDictionary        *sysColorDict;
     NSDictionary        *actionDict;
     BOOL                tabBarVisible;
@@ -64,11 +56,14 @@ extern NSTimeInterval MMBalloonEvalInternalDelay;
 #endif
 }
 
+@property (nonatomic, readonly) NSSize cellSize;
+
 + (MMBackend *)sharedInstance;
 
 - (void)setBackgroundColor:(int)color;
 - (void)setForegroundColor:(int)color;
 - (void)setSpecialColor:(int)color;
+- (void)setTablineColors:(int[6])colors;
 - (void)setDefaultColorsBackground:(int)bg foreground:(int)fg;
 - (NSConnection *)connection;
 - (NSDictionary *)actionDict;
@@ -129,6 +124,8 @@ extern NSTimeInterval MMBalloonEvalInternalDelay;
 - (void)activate;
 - (void)setPreEditRow:(int)row column:(int)col;
 
+- (void)showDefinition:(NSString *)text row:(int)row col:(int)col;
+
 - (int)lookupColorWithKey:(NSString *)key;
 - (BOOL)hasSpecialKeyWithValue:(char_u *)value;
 
@@ -150,7 +147,7 @@ extern NSTimeInterval MMBalloonEvalInternalDelay;
               silent:(BOOL)silent;
 - (NSArray *)serverList;
 - (NSString *)peekForReplyOnPort:(int)port;
-- (NSString *)waitForReplyOnPort:(int)port;
+- (NSString *)waitForReplyOnPort:(int)port timeout:(NSTimeInterval)timeout;
 - (BOOL)sendReply:(NSString *)reply toPort:(int)port;
 
 - (BOOL)waitForAck;

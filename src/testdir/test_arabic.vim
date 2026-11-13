@@ -2,10 +2,7 @@
 " NOTE: This just checks if the code works. If you know Arabic please add
 " functional tests that check the shaping works with real text.
 
-source check.vim
 CheckFeature arabic
-
-source view_util.vim
 
 " Return list of Unicode characters at line lnum.
 " Combining characters are treated as a single item.
@@ -74,9 +71,9 @@ endfunc
 func Test_arabic_toggle_keymap()
   new
   set arabic
-  call feedkeys("i12\<C-^>12\<C-^>12", 'tx')
-  call assert_match("^ *٢١21٢١$", ScreenLines(1, &columns)[0])
-  call assert_equal('١٢12١٢', getline('.'))
+  call feedkeys("i12\<C-^>12\<C-^>12abcd", 'tx')
+  call assert_match("^ *.*ﺷ212121$", ScreenLines(1, &columns)[0])
+  call assert_equal('121212شلاؤي', getline('.'))
   set arabic&
   bwipe!
 endfunc
@@ -582,6 +579,14 @@ func Test_arabic_chars_in_search_cmd()
   set rightleft&
   set arabic&
   bwipe!
+endfunc
+
+func Test_W17_arabic_requires_utf8()
+  let save_enc = &encoding
+  set encoding=latin1 arabic
+  call assert_match('^W17:', GetMessages()[-1])
+  set arabic&
+  let &encoding = save_enc
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

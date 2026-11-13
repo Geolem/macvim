@@ -1,12 +1,12 @@
-" Print all interface versions for Ubuntu. Part 1.
+" Print all interface versions. Part 1.
 
-if 1
+if 1 " This prevents it from being run in tiny versions
   execute 'source' expand('<sfile>:h') .. '/if_ver-cmd.vim'
 
   echo "*** Interface versions ***\n"
 
   echo 'Lua:'
-  PrintVer lua print(_VERSION)
+  PrintVer lua print(vim.lua_version, jit and "(LuaJIT)" or "")
 
   echo 'MzScheme:'
   PrintVer mzscheme (display (version))

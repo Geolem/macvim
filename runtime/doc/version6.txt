@@ -1,7 +1,7 @@
-*version6.txt*  For Vim version 8.2.  Last change: 2021 Jan 17
+*version6.txt*	For Vim version 9.2.  Last change: 2026 Oct 17
 
 
-		  VIM REFERENCE MANUAL    by Bram Moolenaar
+		  VIM REFERENCE MANUAL	  by Bram Moolenaar
 
 
 Welcome to Vim Version 6.0!  A large number of features has been added.  This
@@ -320,7 +320,7 @@ The patterns in 'errorformat' would sometimes ignore case (MS-Windows) and
 sometimes not (Unix).  Now case is always ignored.  Add "\C" to the pattern to
 match case.
 
-The 16 bit MS-DOS version is now compiled without the +listcmds feature
+The 16 bit MS-DOS version is now compiled without the |+listcmds| feature
 (buffer list manipulation commands).  They are not often needed and this
 executable needs to be smaller.
 
@@ -1025,7 +1025,7 @@ Port to OS/390 Unix (Ralf Schandl)
 Included jsbmouse support. (Darren Garth)
 Support for dec mouse in Unix. (Steve Wall)
 
-Port to 16-bit MS Windows (Windows 3.1x) (Vince Negri)
+Port to 16-bit MS-Windows (Windows 3.1x) (Vince Negri)
 
 Port to QNX.  Supports the Photon GUI, mouse, etc. (Julian Kinraid)
 
@@ -2111,11 +2111,11 @@ disables multiple windows for a really small Vim.
 For the tiny version or when FEAT_WINDOWS is not defined: Firstwin and lastwin
 are equal to curwin and don't use w_next and w_prev.
 
-Added the +listcmds feature.  Can be used to compile without the Vim commands
+Added the |+listcmds| feature.  Can be used to compile without the Vim commands
 that manipulate the buffer list and argument list (the buffer list itself is
 still there, can't do without it).
 
-Added the +vreplace feature.  It is disabled in the "small" version to avoid
+Added the |+vreplace| feature.  It is disabled in the "small" version to avoid
 that the 16 bit DOS version runs out of memory.
 
 Removed GTK+ support for versions older than 1.1.16.
@@ -2339,7 +2339,7 @@ name. (Zoltan Arpadffy)
 After ":hi Normal ctermbg=black ctermfg=white" and suspending Vim not all
 characters are redrawn with the right background.
 
-When doing "make test" without +eval or +windows feature, many tests failed.
+When doing "make test" without |+eval| or |+windows| feature, many tests failed.
 Now have test1 generate a script to copy the correct output, so that a test
 that doesn't work is skipped.
 
@@ -2696,7 +2696,7 @@ Multi-byte:
   double-wide character.
 - Overstrike mode for the cmdline replaced only the first byte of a multibyte
   character.
-- The cursor in Replace mode (also in the cmdline) was to small on a
+- The cursor in Replace mode (also in the cmdline) was too small on a
   double-wide character.
 - When a multibyte character contained a 0x80 byte, it didn't work (was using
   a CSI byte instead). (Muraoka Taro)
@@ -2762,7 +2762,7 @@ all commands that cause too much recursiveness.
 Removed "Failed to open input method" error message, too many people got this
 when they didn't want to use a XIM.
 
-GUI: When compiled without the +windows feature, the scrollbar would start
+GUI: When compiled without the |+windows| feature, the scrollbar would start
 below line one.
 
 Removed the trick with redefining character class functions from regexp.c.
@@ -3144,7 +3144,7 @@ the Vim window. (Marcin Dalecki)
 Win32 GUI: when setting 'lines' to a huge number, would not compute the
 available space correctly.  Was counting the menu height twice.
 
-Conversion of the docs to HTML didn't handle the line with the +quickfix tag
+Conversion of the docs to HTML didn't handle the line with the |+quickfix| tag
 correctly. (Antonio Colombo)
 
 Win32: fname_case() didn't handle multibyte characters correctly. (Yasuhiro
@@ -3546,7 +3546,7 @@ Added Simplified Chinese translation of the tutor. (Mendel L Chan)
 Added Russian keymap for yawerty keyboard.
 
 Added an explanation of using the vimrc file in the tutor.
-Changed tutor.vim to get the right encoding for the Taiwainese tutor.
+Changed tutor.vim to get the right encoding for the Taiwanese tutor.
 
 Added Russian tutor. (Andrey Kiselev)
 Added Polish tutor. (Mikolaj Machowski)
@@ -5465,7 +5465,7 @@ Files:	    src/fileio.c
 Patch 6.0.267
 Problem:    UTF-8: Although 'isprint' says a character is printable,
 	    utf_char2cells() still considers it unprintable.
-Solution:   Use vim_isprintc() for characters upto 0x100. (Yasuhiro Matsumoto)
+Solution:   Use vim_isprintc() for characters up to 0x100. (Yasuhiro Matsumoto)
 Files:	    src/mbyte.c
 
 Patch 6.0.268 (extra) (depends on patch 6.0.255)
@@ -9649,7 +9649,7 @@ Files:	    src/Make_cyg.mak, src/Make_ming.mak
 
 Patch 6.2f.016
 Problem:    "vim --version > ff" on non-Unix systems results in a file with a
-	    missing line break at the end. (Bill McCArthy)
+	    missing line break at the end. (Bill McCarthy)
 Solution:   Add a line break.
 Files:	    src/main.c
 
@@ -12232,7 +12232,7 @@ Files:	    Makefile, src/gvim.exe.mnf, src/vim.rc
 
 Patch 6.2.348
 Problem:    Win32: "vim c:\dir\(test)" doesn't work, because the 'isfname'
-	    default value doesn't contain parenthesis.
+	    default value doesn't contain parentheses.
 Solution:   Temporarily add '(' and ')' to 'isfname' when expanding file name
 	    arguments.
 Files:	    src/main.c
@@ -12447,7 +12447,7 @@ Solution:   Make sure ".out" files are deleted when they get in the way.  Add
 Files:	    src/Make_bc5.mak, src/testdir/Make_dos.mak
 
 Patch 6.2.381
-Problem:    Setting 'fileencoding' to a comma separated list (confusing it
+Problem:    Setting 'fileencoding' to a comma-separated list (confusing it
 	    with 'fileencodings') does not result in an error message.
 	    Setting 'fileencoding' in an empty file marks it as modified.
 	    There is no "+" in the title after setting 'fileencoding'.
@@ -12624,7 +12624,7 @@ Solution:   Use ":compiler!" to set a compiler globally, otherwise it's local
 	    to the buffer and "b:current_compiler" is used.  Give an error
 	    when no compiler script could be found.
 	    Note: updated compiler plugins can be found at
-	    ftp://ftp.vim.org/pub/vim/runtime/compiler/
+	    https://github.com/vim/vim/tree/master/runtime/compiler
 Files:	    runtime/compiler/msvc.vim, runtime/doc/quickfix.txt, src/eval.c,
 	    src/ex_cmds2.c
 
@@ -12864,7 +12864,7 @@ Files:	    src/message.c
 Patch 6.2.444
 Problem:    When adding the 'c' flag to a ":substitute" command it may replace
 	    more times than without the 'c' flag.  Happens for a  match that
-	    starts with "\ze" (Marcel Svitalsk) and when using "\@<=" (Klaus
+	    starts with "\ze" (Marcel Svitalsky) and when using "\@<=" (Klaus
 	    Bosau).
 Solution:   Correct "prev_matchcol" when replacing the line.  Don't replace
 	    the line when the pattern uses look-behind matching.

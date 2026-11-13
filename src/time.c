@@ -65,11 +65,11 @@ vim_localtime(
     time_T
 vim_time(void)
 {
-# ifdef FEAT_EVAL
+#ifdef FEAT_EVAL
     return time_for_testing == 0 ? time(NULL) : time_for_testing;
-# else
+#else
     return time(NULL);
-# endif
+#endif
 }
 
 /*
@@ -82,7 +82,7 @@ vim_time(void)
     char *
 get_ctime(time_t thetime, int add_newline)
 {
-    static char buf[50];
+    static char buf[100];  // hopefully enough for every language
 #ifdef HAVE_STRFTIME
     struct tm	tmval;
     struct tm	*curtime;
@@ -90,11 +90,20 @@ get_ctime(time_t thetime, int add_newline)
     curtime = vim_localtime(&thetime, &tmval);
     // MSVC returns NULL for an invalid value of seconds.
     if (curtime == NULL)
-	vim_strncpy((char_u *)buf, (char_u *)_("(Invalid)"), sizeof(buf) - 1);
+	vim_strncpy((char_u *)buf, (char_u *)_("(Invalid)"), sizeof(buf) - 2);
     else
     {
-	(void)strftime(buf, sizeof(buf) - 1, _("%a %b %d %H:%M:%S %Y"),
-								    curtime);
+	// xgettext:no-c-format
+	if (strftime(buf, sizeof(buf) - 2, _("%a %b %d %H:%M:%S %Y"), curtime)
+									  == 0)
+	{
+	    // Quoting "man strftime":
+	    // > If the length of the result string (including the terminating
+	    // > null byte) would exceed max bytes, then strftime() returns 0,
+	    // > and the contents of the array are undefined.
+	    vim_strncpy((char_u *)buf, (char_u *)_("(Invalid)"),
+							      sizeof(buf) - 2);
+	}
 # ifdef MSWIN
 	if (enc_codepage >= 0 && (int)GetACP() != enc_codepage)
 	{
@@ -104,7 +113,7 @@ get_ctime(time_t thetime, int add_newline)
 	    acp_to_enc((char_u *)buf, (int)strlen(buf), &to_free, &len);
 	    if (to_free != NULL)
 	    {
-		STRCPY(buf, to_free);
+		STRNCPY(buf, to_free, sizeof(buf) - 2);
 		vim_free(to_free);
 	    }
 	}
@@ -118,11 +127,11 @@ get_ctime(time_t thetime, int add_newline)
     return buf;
 }
 
-#if defined(FEAT_EVAL) || defined(PROTO)
+#if defined(FEAT_EVAL)
 
-#if defined(MACOS_X)
-# include <time.h>	// for time_t
-#endif
+# if defined(MACOS_X)
+#  include <time.h>	// for time_t
+# endif
 
 /*
  * "localtime()" function
@@ -154,7 +163,7 @@ list2proftime(typval_T *arg, proftime_T *tm)
     tm->LowPart = n2;
 #  else
     tm->tv_sec = n1;
-    tm->tv_usec = n2;
+    tm->tv_fsec = n2;
 #  endif
     return error ? FAIL : OK;
 }
@@ -169,6 +178,16 @@ f_reltime(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 # ifdef FEAT_RELTIME
     proftime_T	res;
     proftime_T	start;
+    long	n1, n2;
+
+    if (rettv_list_alloc(rettv) == FAIL)
+	return;
+
+    if (in_vim9script()
+	    && (check_for_opt_list_arg(argvars, 0) == FAIL
+		|| (argvars[0].v_type != VAR_UNKNOWN
+		    && check_for_opt_list_arg(argvars, 1) == FAIL)))
+	return;
 
     if (argvars[0].v_type == VAR_UNKNOWN)
     {
@@ -178,7 +197,11 @@ f_reltime(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
     else if (argvars[1].v_type == VAR_UNKNOWN)
     {
 	if (list2proftime(&argvars[0], &res) == FAIL)
+	{
+	    if (in_vim9script())
+		emsg(_(e_invalid_argument));
 	    return;
+	}
 	profile_end(&res);
     }
     else
@@ -186,46 +209,48 @@ f_reltime(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 	// Two arguments: compute the difference.
 	if (list2proftime(&argvars[0], &start) == FAIL
 		|| list2proftime(&argvars[1], &res) == FAIL)
+	{
+	    if (in_vim9script())
+		emsg(_(e_invalid_argument));
 	    return;
+	}
 	profile_sub(&res, &start);
     }
 
-    if (rettv_list_alloc(rettv) == OK)
-    {
-	long	n1, n2;
-
 #  ifdef MSWIN
-	n1 = res.HighPart;
-	n2 = res.LowPart;
+    n1 = res.HighPart;
+    n2 = res.LowPart;
 #  else
-	n1 = res.tv_sec;
-	n2 = res.tv_usec;
+    n1 = res.tv_sec;
+    n2 = res.tv_fsec;
 #  endif
-	list_append_number(rettv->vval.v_list, (varnumber_T)n1);
-	list_append_number(rettv->vval.v_list, (varnumber_T)n2);
-    }
+    list_append_number(rettv->vval.v_list, (varnumber_T)n1);
+    list_append_number(rettv->vval.v_list, (varnumber_T)n2);
 # endif
 }
 
-# ifdef FEAT_FLOAT
 /*
  * "reltimefloat()" function
  */
     void
 f_reltimefloat(typval_T *argvars UNUSED, typval_T *rettv)
 {
-#  ifdef FEAT_RELTIME
+# ifdef FEAT_RELTIME
     proftime_T	tm;
-#  endif
+# endif
 
     rettv->v_type = VAR_FLOAT;
     rettv->vval.v_float = 0;
-#  ifdef FEAT_RELTIME
+# ifdef FEAT_RELTIME
+    if (in_vim9script() && check_for_list_arg(argvars, 0) == FAIL)
+	return;
+
     if (list2proftime(&argvars[0], &tm) == OK)
 	rettv->vval.v_float = profile_float(&tm);
-#  endif
-}
+    else if (in_vim9script())
+	emsg(_(e_invalid_argument));
 # endif
+}
 
 /*
  * "reltimestr()" function
@@ -233,30 +258,45 @@ f_reltimefloat(typval_T *argvars UNUSED, typval_T *rettv)
     void
 f_reltimestr(typval_T *argvars UNUSED, typval_T *rettv)
 {
-# ifdef FEAT_RELTIME
-    proftime_T	tm;
-# endif
-
     rettv->v_type = VAR_STRING;
     rettv->vval.v_string = NULL;
 # ifdef FEAT_RELTIME
+    if (in_vim9script() && check_for_list_arg(argvars, 0) == FAIL)
+	return;
+
+    proftime_T	tm;
     if (list2proftime(&argvars[0], &tm) == OK)
+    {
+#  ifdef MSWIN
 	rettv->vval.v_string = vim_strsave((char_u *)profile_msg(&tm));
+#  else
+	static char buf[50];
+	long usec = tm.tv_fsec / (TV_FSEC_SEC / 1000000);
+	vim_snprintf(buf, sizeof(buf), "%3ld.%06ld", (long)tm.tv_sec, usec);
+	rettv->vval.v_string = vim_strsave((char_u *)buf);
+#  endif
+    }
+    else if (in_vim9script())
+	emsg(_(e_invalid_argument));
 # endif
 }
 
-# if defined(HAVE_STRFTIME) || defined(PROTO)
+# if defined(HAVE_STRFTIME)
 /*
  * "strftime({format}[, {time}])" function
  */
     void
 f_strftime(typval_T *argvars, typval_T *rettv)
 {
-    char_u	result_buf[256];
     struct tm	tmval;
     struct tm	*curtime;
     time_t	seconds;
     char_u	*p;
+
+    if (in_vim9script()
+	    && (check_for_string_arg(argvars, 0) == FAIL
+		|| check_for_opt_number_arg(argvars, 1) == FAIL))
+	return;
 
     rettv->v_type = VAR_STRING;
 
@@ -268,39 +308,52 @@ f_strftime(typval_T *argvars, typval_T *rettv)
     curtime = vim_localtime(&seconds, &tmval);
     // MSVC returns NULL for an invalid value of seconds.
     if (curtime == NULL)
-	rettv->vval.v_string = vim_strsave((char_u *)_("(Invalid)"));
-    else
     {
-	vimconv_T   conv;
-	char_u	    *enc;
-
-	conv.vc_type = CONV_NONE;
-	enc = enc_locale();
-	convert_setup(&conv, p_enc, enc);
-	if (conv.vc_type != CONV_NONE)
-	    p = string_convert(&conv, p, NULL);
-	if (p != NULL)
-	    (void)strftime((char *)result_buf, sizeof(result_buf),
-							  (char *)p, curtime);
-	else
-	    result_buf[0] = NUL;
-
-	if (conv.vc_type != CONV_NONE)
-	    vim_free(p);
-	convert_setup(&conv, enc, p_enc);
-	if (conv.vc_type != CONV_NONE)
-	    rettv->vval.v_string = string_convert(&conv, result_buf, NULL);
-	else
-	    rettv->vval.v_string = vim_strsave(result_buf);
-
-	// Release conversion descriptors
-	convert_setup(&conv, NULL, NULL);
-	vim_free(enc);
+	rettv->vval.v_string = vim_strsave((char_u *)_("(Invalid)"));
+	return;
     }
+
+#  ifdef MSWIN
+    WCHAR	    result_buf[256];
+    WCHAR	    *wp;
+
+    wp = enc_to_utf16(p, NULL);
+    if (wp != NULL)
+	(void)wcsftime(result_buf, ARRAY_LENGTH(result_buf), wp, curtime);
+    else
+	result_buf[0] = NUL;
+    rettv->vval.v_string = utf16_to_enc(result_buf, NULL);
+    vim_free(wp);
+#  else
+    char_u	    result_buf[256];
+    vimconv_T   conv;
+    char_u	    *enc;
+
+    conv.vc_type = CONV_NONE;
+    enc = enc_locale();
+    convert_setup(&conv, p_enc, enc);
+    if (conv.vc_type != CONV_NONE)
+	p = string_convert(&conv, p, NULL);
+    if (p == NULL || strftime((char *)result_buf, sizeof(result_buf),
+		(char *)p, curtime) == 0)
+	result_buf[0] = NUL;
+
+    if (conv.vc_type != CONV_NONE)
+	vim_free(p);
+    convert_setup(&conv, enc, p_enc);
+    if (conv.vc_type != CONV_NONE)
+	rettv->vval.v_string = string_convert(&conv, result_buf, NULL);
+    else
+	rettv->vval.v_string = vim_strsave(result_buf);
+
+    // Release conversion descriptors
+    convert_setup(&conv, NULL, NULL);
+    vim_free(enc);
+#  endif
 }
 # endif
 
-# if defined(HAVE_STRPTIME) || defined(PROTO)
+# if defined(HAVE_STRPTIME)
 /*
  * "strptime({format}, {timestring})" function
  */
@@ -313,6 +366,11 @@ f_strptime(typval_T *argvars, typval_T *rettv)
     vimconv_T   conv;
     char_u	*enc;
 
+    if (in_vim9script()
+	    && (check_for_string_arg(argvars, 0) == FAIL
+		|| check_for_string_arg(argvars, 1) == FAIL))
+	return;
+
     CLEAR_FIELD(tmval);
     tmval.tm_isdst = -1;
     fmt = tv_get_string(&argvars[0]);
@@ -323,6 +381,10 @@ f_strptime(typval_T *argvars, typval_T *rettv)
     convert_setup(&conv, p_enc, enc);
     if (conv.vc_type != CONV_NONE)
 	fmt = string_convert(&conv, fmt, NULL);
+#  ifdef HAVE_TZSET
+    // Pick up any change to $TZ so mktime() uses the requested timezone.
+    tzset();
+#  endif
     if (fmt == NULL
 	    || strptime((char *)str, (char *)fmt, &tmval) == NULL
 	    || (rettv->vval.v_number = mktime(&tmval)) == -1)
@@ -335,12 +397,12 @@ f_strptime(typval_T *argvars, typval_T *rettv)
 }
 # endif
 
-# if defined(FEAT_TIMERS) || defined(PROTO)
+# if defined(FEAT_TIMERS)
 static timer_T	*first_timer = NULL;
 static long	last_timer_id = 0;
 
 /*
- * Return time left until "due".  Negative if past "due".
+ * Return time left, in "msec", until "due".  Negative if past "due".
  */
     long
 proftime_time_left(proftime_T *due, proftime_T *now)
@@ -357,7 +419,7 @@ proftime_time_left(proftime_T *due, proftime_T *now)
     if (now->tv_sec > due->tv_sec)
 	return 0;
     return (due->tv_sec - now->tv_sec) * 1000
-	+ (due->tv_usec - now->tv_usec) / 1000;
+	+ (due->tv_fsec - now->tv_fsec) / (TV_FSEC_SEC / 1000);
 #  endif
 }
 
@@ -417,8 +479,18 @@ create_timer(long msec, int repeat)
 	timer->tr_repeat = repeat - 1;
     timer->tr_interval = msec;
 
-    profile_setlimit(msec, &timer->tr_due);
+    timer_start(timer);
     return timer;
+}
+
+/*
+ * (Re)start a timer.
+ */
+    void
+timer_start(timer_T *timer)
+{
+    profile_setlimit(timer->tr_interval, &timer->tr_due);
+    timer->tr_paused = FALSE;
 }
 
 /*
@@ -430,12 +502,27 @@ timer_callback(timer_T *timer)
     typval_T	rettv;
     typval_T	argv[2];
 
+#  ifdef FEAT_EVAL
+    if (ch_log_active())
+    {
+	callback_T *cb = &timer->tr_callback;
+
+	ch_log(NULL, "invoking timer callback %s",
+	       cb->cb_partial != NULL ? cb->cb_partial->pt_name : cb->cb_name);
+    }
+#  endif
+
     argv[0].v_type = VAR_NUMBER;
     argv[0].vval.v_number = (varnumber_T)timer->tr_id;
     argv[1].v_type = VAR_UNKNOWN;
 
+    rettv.v_type = VAR_UNKNOWN;
     call_callback(&timer->tr_callback, -1, &rettv, 1, argv);
     clear_tv(&rettv);
+
+#  ifdef FEAT_EVAL
+    ch_log(NULL, "timer callback finished");
+#  endif
 }
 
 /*
@@ -455,8 +542,9 @@ check_due_timer(void)
     int		need_update_screen = FALSE;
     long	current_id = last_timer_id;
 
-    // Don't run any timers while exiting or dealing with an error.
-    if (exiting || aborting())
+    // Don't run any timers while exiting, dealing with an error or at the
+    // debug prompt.
+    if (exiting || aborting() || debug_mode)
 	return next_due;
 
     profile_start(&now);
@@ -474,15 +562,15 @@ check_due_timer(void)
 	    int save_timer_busy = timer_busy;
 	    int save_vgetc_busy = vgetc_busy;
 	    int save_did_emsg = did_emsg;
+	    int prev_uncaught_emsg = uncaught_emsg;
 	    int save_called_emsg = called_emsg;
 	    int save_must_redraw = must_redraw;
-	    int save_trylevel = trylevel;
-	    int save_did_throw = did_throw;
-	    int save_need_rethrow = need_rethrow;
 	    int save_ex_pressedreturn = get_pressedreturn();
 	    int save_may_garbage_collect = may_garbage_collect;
-	    except_T *save_current_exception = current_exception;
-	    vimvars_save_T vvsave;
+	    vimvars_save_T	vvsave;
+	    exception_state_T	estate;
+
+	    exception_state_save(&estate);
 
 	    // Create a scope for running the timer callback, ignoring most of
 	    // the current scope, such as being inside a try/catch.
@@ -490,13 +578,9 @@ check_due_timer(void)
 	    vgetc_busy = 0;
 	    called_emsg = 0;
 	    did_emsg = FALSE;
-	    did_uncaught_emsg = FALSE;
 	    must_redraw = 0;
-	    trylevel = 0;
-	    did_throw = FALSE;
-	    need_rethrow = FALSE;
-	    current_exception = NULL;
 	    may_garbage_collect = FALSE;
+	    exception_state_clear();
 	    save_vimvars(&vvsave);
 
 	    // Invoke the callback.
@@ -509,14 +593,13 @@ check_due_timer(void)
 	    did_one = TRUE;
 	    timer_busy = save_timer_busy;
 	    vgetc_busy = save_vgetc_busy;
-	    if (did_uncaught_emsg)
+	    if (uncaught_emsg > prev_uncaught_emsg)
 		++timer->tr_emsg_count;
+	    else
+		timer->tr_emsg_count = 0;
 	    did_emsg = save_did_emsg;
 	    called_emsg = save_called_emsg;
-	    trylevel = save_trylevel;
-	    did_throw = save_did_throw;
-	    need_rethrow = save_need_rethrow;
-	    current_exception = save_current_exception;
+	    exception_state_restore(&estate);
 	    restore_vimvars(&vvsave);
 	    if (must_redraw != 0)
 		need_update_screen = TRUE;
@@ -540,18 +623,30 @@ check_due_timer(void)
 	    else
 	    {
 		this_due = -1;
-		remove_timer(timer);
-		free_timer(timer);
+		if (timer->tr_keep)
+		    timer->tr_paused = TRUE;
+		else
+		{
+		    remove_timer(timer);
+		    free_timer(timer);
+		}
 	    }
+
+#  ifdef FEAT_IMAGE
+	    // Make sure to update any image placements. Without this, image
+	    // placements will not be updated on the screen properly in a
+	    // hit-enter prompt.
+	    draw_image_placements();
+#  endif
 	}
 	if (this_due > 0 && (next_due == -1 || next_due > this_due))
 	    next_due = this_due;
     }
 
     if (did_one)
-	redraw_after_callback(need_update_screen);
+	redraw_after_callback(need_update_screen, FALSE);
 
-#ifdef FEAT_BEVAL_TERM
+#  ifdef FEAT_BEVAL_TERM
     if (bevalexpr_due_set)
     {
 	this_due = proftime_time_left(&bevalexpr_due, &now);
@@ -573,11 +668,11 @@ check_due_timer(void)
 	else if (next_due == -1 || next_due > this_due)
 	    next_due = this_due;
     }
-#endif
-#ifdef FEAT_TERMINAL
+#  endif
+#  ifdef FEAT_TERMINAL
     // Some terminal windows may need their buffer updated.
     next_due = term_check_timers(next_due, &now);
-#endif
+#  endif
 
     return current_id != last_timer_id ? 1 : next_due;
 }
@@ -590,12 +685,12 @@ find_timer(long id)
 {
     timer_T *timer;
 
-    if (id >= 0)
-    {
-	FOR_ALL_TIMERS(timer)
-	    if (timer->tr_id == id)
-		return timer;
-    }
+    if (id < 0)
+	return NULL;
+
+    FOR_ALL_TIMERS(timer)
+	if (timer->tr_id == id)
+	    return timer;
     return NULL;
 }
 
@@ -650,7 +745,8 @@ add_timer_info(typval_T *rettv, timer_T *timer)
     dict_add_number(dict, "remaining", (long)remaining);
 
     dict_add_number(dict, "repeat",
-		    (long)(timer->tr_repeat < 0 ? -1 : timer->tr_repeat + 1));
+	    (long)(timer->tr_repeat < 0 ? -1
+			     : timer->tr_repeat + (timer->tr_firing ? 0 : 1)));
     dict_add_number(dict, "paused", (long)(timer->tr_paused));
 
     di = dictitem_alloc((char_u *)"callback");
@@ -695,25 +791,39 @@ set_ref_in_timer(int copyID)
 	    tv.v_type = VAR_FUNC;
 	    tv.vval.v_string = timer->tr_callback.cb_name;
 	}
-	abort = abort || set_ref_in_item(&tv, copyID, NULL, NULL);
+	abort = abort || set_ref_in_item(&tv, copyID, NULL, NULL, NULL);
     }
     return abort;
 }
 
-# if defined(EXITFREE) || defined(PROTO)
-    void
-timer_free_all()
+/*
+ * Return TRUE if "timer" exists in the list of timers.
+ */
+    int
+timer_valid(timer_T *timer)
 {
-    timer_T *timer;
+    if (timer == NULL)
+	return FALSE;
 
+    timer_T *t;
+    FOR_ALL_TIMERS(t)
+	if (t == timer)
+	    return TRUE;
+    return FALSE;
+}
+
+#  if defined(EXITFREE)
+    void
+timer_free_all(void)
+{
     while (first_timer != NULL)
     {
-	timer = first_timer;
+	timer_T *timer = first_timer;
 	remove_timer(timer);
 	free_timer(timer);
     }
 }
-# endif
+#  endif
 
 /*
  * "timer_info([timer])" function
@@ -723,18 +833,17 @@ f_timer_info(typval_T *argvars, typval_T *rettv)
 {
     timer_T *timer = NULL;
 
-    if (rettv_list_alloc(rettv) != OK)
+    if (rettv_list_alloc(rettv) == FAIL)
 	return;
+
+    if (check_for_opt_number_arg(argvars, 0) == FAIL)
+	return;
+
     if (argvars[0].v_type != VAR_UNKNOWN)
     {
-	if (argvars[0].v_type != VAR_NUMBER)
-	    emsg(_(e_number_exp));
-	else
-	{
-	    timer = find_timer((int)tv_get_number(&argvars[0]));
-	    if (timer != NULL)
-		add_timer_info(rettv, timer);
-	}
+	timer = find_timer((int)tv_get_number(&argvars[0]));
+	if (timer != NULL)
+	    add_timer_info(rettv, timer);
     }
     else
 	add_timer_info_all(rettv);
@@ -747,16 +856,23 @@ f_timer_info(typval_T *argvars, typval_T *rettv)
 f_timer_pause(typval_T *argvars, typval_T *rettv UNUSED)
 {
     timer_T	*timer = NULL;
-    int		paused = (int)tv_get_bool(&argvars[1]);
+
+    if (in_vim9script()
+	    && (check_for_number_arg(argvars, 0) == FAIL
+		|| check_for_bool_arg(argvars, 1) == FAIL))
+	return;
 
     if (argvars[0].v_type != VAR_NUMBER)
-	emsg(_(e_number_exp));
-    else
     {
-	timer = find_timer((int)tv_get_number(&argvars[0]));
-	if (timer != NULL)
-	    timer->tr_paused = paused;
+	emsg(_(e_number_expected));
+	return;
     }
+
+    int	paused = (int)tv_get_bool(&argvars[1]);
+
+    timer = find_timer((int)tv_get_number(&argvars[0]));
+    if (timer != NULL)
+	timer->tr_paused = paused;
 }
 
 /*
@@ -765,7 +881,7 @@ f_timer_pause(typval_T *argvars, typval_T *rettv UNUSED)
     void
 f_timer_start(typval_T *argvars, typval_T *rettv)
 {
-    long	msec = (long)tv_get_number(&argvars[0]);
+    long	msec;
     timer_T	*timer;
     int		repeat = 0;
     callback_T	callback;
@@ -774,30 +890,42 @@ f_timer_start(typval_T *argvars, typval_T *rettv)
     rettv->vval.v_number = -1;
     if (check_secure())
 	return;
+
+    if (in_vim9script()
+	    && (check_for_number_arg(argvars, 0) == FAIL
+		|| check_for_opt_dict_arg(argvars, 2) == FAIL))
+	return;
+
+    msec = (long)tv_get_number(&argvars[0]);
     if (argvars[2].v_type != VAR_UNKNOWN)
     {
-	if (argvars[2].v_type != VAR_DICT
-				   || (dict = argvars[2].vval.v_dict) == NULL)
-	{
-	    semsg(_(e_invarg2), tv_get_string(&argvars[2]));
+	if (check_for_nonnull_dict_arg(argvars, 2) == FAIL)
 	    return;
-	}
-	if (dict_find(dict, (char_u *)"repeat", -1) != NULL)
-	    repeat = dict_get_number(dict, (char_u *)"repeat");
+
+	dict = argvars[2].vval.v_dict;
+	if (dict_has_key(dict, "repeat"))
+	    repeat = dict_get_number(dict, "repeat");
     }
 
     callback = get_callback(&argvars[1]);
     if (callback.cb_name == NULL)
 	return;
+    if (in_vim9script() && *callback.cb_name == NUL)
+    {
+	// empty callback is not useful for a timer
+	emsg(_(e_invalid_callback_argument));
+	free_callback(&callback);
+	return;
+    }
 
     timer = create_timer(msec, repeat);
     if (timer == NULL)
-	free_callback(&callback);
-    else
     {
-	set_callback(&timer->tr_callback, &callback);
-	rettv->vval.v_number = (varnumber_T)timer->tr_id;
+	free_callback(&callback);
+	return;
     }
+    set_callback(&timer->tr_callback, &callback);
+    rettv->vval.v_number = (varnumber_T)timer->tr_id;
 }
 
 /*
@@ -808,11 +936,9 @@ f_timer_stop(typval_T *argvars, typval_T *rettv UNUSED)
 {
     timer_T *timer;
 
-    if (argvars[0].v_type != VAR_NUMBER)
-    {
-	emsg(_(e_number_exp));
+    if (check_for_number_arg(argvars, 0) == FAIL)
 	return;
-    }
+
     timer = find_timer((int)tv_get_number(&argvars[0]));
     if (timer != NULL)
 	stop_timer(timer);
@@ -829,7 +955,7 @@ f_timer_stopall(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 
 # endif // FEAT_TIMERS
 
-# if defined(STARTUPTIME) || defined(PROTO)
+# if defined(STARTUPTIME)
 static struct timeval	prev_timeval;
 
 #  ifdef MSWIN
@@ -907,33 +1033,33 @@ time_msg(
     static struct timeval	start;
     struct timeval		now;
 
-    if (time_fd != NULL)
+    if (time_fd == NULL)
+	return;
+
+    if (strstr(mesg, "STARTING") != NULL)
     {
-	if (strstr(mesg, "STARTING") != NULL)
-	{
-	    gettimeofday(&start, NULL);
-	    prev_timeval = start;
-	    fprintf(time_fd, "\n\ntimes in msec\n");
-	    fprintf(time_fd, " clock   self+sourced   self:  sourced script\n");
-	    fprintf(time_fd, " clock   elapsed:              other lines\n\n");
-	}
-	gettimeofday(&now, NULL);
-	time_diff(&start, &now);
-	if (((struct timeval *)tv_start) != NULL)
-	{
-	    fprintf(time_fd, "  ");
-	    time_diff(((struct timeval *)tv_start), &now);
-	}
-	fprintf(time_fd, "  ");
-	time_diff(&prev_timeval, &now);
-	prev_timeval = now;
-	fprintf(time_fd, ": %s\n", mesg);
+	gettimeofday(&start, NULL);
+	prev_timeval = start;
+	fprintf(time_fd, "\n\ntimes in msec\n");
+	fprintf(time_fd, " clock   self+sourced   self:  sourced script\n");
+	fprintf(time_fd, " clock   elapsed:              other lines\n\n");
     }
+    gettimeofday(&now, NULL);
+    time_diff(&start, &now);
+    if (((struct timeval *)tv_start) != NULL)
+    {
+	fprintf(time_fd, "  ");
+	time_diff(((struct timeval *)tv_start), &now);
+    }
+    fprintf(time_fd, "  ");
+    time_diff(&prev_timeval, &now);
+    prev_timeval = now;
+    fprintf(time_fd, ": %s\n", mesg);
 }
 # endif	// STARTUPTIME
 #endif // FEAT_EVAL
 
-#if defined(FEAT_SPELL) || defined(FEAT_PERSISTENT_UNDO) || defined(PROTO)
+#if defined(FEAT_SPELL) || defined(FEAT_PERSISTENT_UNDO)
 /*
  * Read 8 bytes from "fd" and turn them into a time_T, MSB first.
  * Returns -1 when encountering EOF.
@@ -953,14 +1079,6 @@ get8ctime(FILE *fd)
     }
     return n;
 }
-
-#ifdef _MSC_VER
-# if (_MSC_VER <= 1200)
-// This line is required for VC6 without the service pack.  Also see the
-// matching #pragma below.
- #  pragma optimize("", off)
-# endif
-#endif
 
 /*
  * Write time_T to file "fd" in 8 bytes.
@@ -1000,21 +1118,15 @@ time_to_bytes(time_T the_time, char_u *buf)
 	    buf[bi++] = 0;
 	else
 	{
-#if defined(SIZEOF_TIME_T) && SIZEOF_TIME_T > 4
+# if defined(SIZEOF_TIME_T) && SIZEOF_TIME_T > 4
 	    c = (int)(wtime >> (i * 8));
-#else
+# else
 	    c = (int)((long_u)wtime >> (i * 8));
-#endif
+# endif
 	    buf[bi++] = c;
 	}
     }
 }
-
-#ifdef _MSC_VER
-# if (_MSC_VER <= 1200)
- #  pragma optimize("", on)
-# endif
-#endif
 
 #endif
 
@@ -1027,16 +1139,19 @@ add_time(char_u *buf, size_t buflen, time_t tt)
 #ifdef HAVE_STRFTIME
     struct tm	tmval;
     struct tm	*curtime;
+    size_t	n;
 
     if (vim_time() - tt >= 100)
     {
 	curtime = vim_localtime(&tt, &tmval);
 	if (vim_time() - tt < (60L * 60L * 12L))
 	    // within 12 hours
-	    (void)strftime((char *)buf, buflen, "%H:%M:%S", curtime);
+	    n = strftime((char *)buf, buflen, "%H:%M:%S", curtime);
 	else
 	    // longer ago
-	    (void)strftime((char *)buf, buflen, "%Y/%m/%d %H:%M:%S", curtime);
+	    n = strftime((char *)buf, buflen, "%Y/%m/%d %H:%M:%S", curtime);
+	if (n == 0)
+	    buf[0] = NUL;
     }
     else
 #endif

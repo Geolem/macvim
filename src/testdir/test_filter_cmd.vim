@@ -1,7 +1,5 @@
 " Test the :filter command modifier
 
-source check.vim
-
 func Test_filter()
   edit Xdoesnotmatch
   edit Xwillmatch
@@ -188,6 +186,12 @@ func Test_filter_display()
   call assert_false(index(lines, '"%') < 0)
 
   bwipe!
+endfunc
+
+func Test_filter_scriptnames()
+  let lines = split(execute('filter /test_filter_cmd/ scriptnames'), "\n")
+  call assert_equal(1, len(lines))
+  call assert_match('filter_cmd', lines[0])
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab
